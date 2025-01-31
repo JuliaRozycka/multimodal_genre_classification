@@ -4,7 +4,9 @@ from tqdm import tqdm
 import contractions
 import nltk
 from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer, PorterStemmer
+
 
 class LyricPreprocessor:
     def __init__(self, lyrics: str):
@@ -44,28 +46,46 @@ class LyricPreprocessor:
         data[self.lyrics] = data[self.lyrics].progress_apply(lambda x: contractions.fix(x))
         return data
 
-    def lemmatize_lyrics(self, df: pd.DataFrame, output_column: str) -> pd.DataFrame:
+    def lemmatize_lyrics(self, text: str) -> str:
+        lemmatizer = WordNetLemmatizer()
+        tokens = word_tokenize(text)
+        lemmatized_tokens = [lemmatizer.lemmatize(token) for token in tokens]
+        return ' '.join(lemmatized_tokens)
+
+    # Function to stem lyrics
+    def stem_lyrics(self, text: str):
+        stemmer = PorterStemmer()
+        tokens = word_tokenize(text)
+        stemmed_tokens = [stemmer.stem(token) for token in tokens]
+        return ' '.join(stemmed_tokens)
+
+    # Function to lemmatize lyrics and remove stop-words
+    def lemmatize_and_remove_stopwords(self, text: str):
+        lemmatizer = WordNetLemmatizer()
+        stop_words = set(stopwords.words('english'))
+        tokens = word_tokenize(text)
+        lemmatized_tokens = [lemmatizer.lemmatize(token) for token in tokens if token.lower() not in stop_words]
+        return ' '.join(lemmatized_tokens)
+
+
+    def reduce_words(self, df: pd.DataFrame, output_column: str, method='lemmatize') -> pd.DataFrame:
         nltk.download('punkt')
         nltk.download('wordnet')
         nltk.download('stopwords')
         nltk.download('punkt_tab')
 
-        # Initialize lemmatizer
-        lemmatizer = WordNetLemmatizer()
-
-        # Function to lemmatize lyrics
-        def lemmatize_lyrics(lyrics):
-            tokens = word_tokenize(lyrics)
-            lemmatized_tokens = [lemmatizer.lemmatize(token) for token in tokens]
-            return ' '.join(lemmatized_tokens)
-
         # Create sets
         tqdm.pandas()
-        df[output_column] = df[self.lyrics].progress_apply(lemmatize_lyrics)
+        if method == 'lemmatize':
+            df[output_column] = df[self.lyrics].progress_apply(self.lemmatize_lyrics)
+        elif method == 'stem':
+            df[output_column] = df[self.lyrics].progress_apply(self.stem_lyrics)
+        elif method == 'lemmatize_and_remove_stopwords':
+            df[output_column] = df[self.lyrics].progress_apply(self.lemmatize_and_remove_stopwords)
         return df
 
     def preprocess_lyrics(self, data: pd.DataFrame, output_column: str) -> pd.DataFrame:
         data = self.preprocess_for_nlp(data)
         data = self.handle_contractions(data)
-        data = self.lemmatize_lyrics(data, output_column)
+        data = self.reduce_words(data, output_column)
         return data
